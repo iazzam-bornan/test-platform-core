@@ -1,6 +1,6 @@
 # Test Configuration
 
-Tests define what runs against your services after they're all healthy. There are two test modes: built-in HTTP checks and custom container tests.
+Tests define what runs against your services after they're all healthy. There are three test modes: built-in HTTP checks, JMeter load tests, and custom container tests.
 
 ## HTTP Checks (Built-in)
 
@@ -70,6 +70,93 @@ Each check emits a `result` event:
 - Health monitoring: check service health after deployment
 - Warm-up testing: hit endpoints multiple times to verify stability
 - Regression: ensure known endpoints still respond correctly
+
+## JMeter Load Tests
+
+First-class Apache JMeter support. Declare your test plan and parameters — the platform generates the wrapper script, overrides the entrypoint, and mounts the `.jmx` file automatically.
+
+```typescript
+{
+  test: {
+    jmeter: {
+      testPlan: "./tests/load-test.jmx",   // path to .jmx file
+      threads: 20,                           // default: 10
+      rampUp: 10,                            // default: 5s
+      loops: 5,                              // default: 3
+      errorThreshold: 5,                     // default: 10%
+      properties: {                          // passed as -J flags
+        HOST: "api",
+        PORT: "3000",
+      },
+    },
+  },
+}
+```
+
+### How It Works
+
+1. The platform generates a shell script with your JMeter parameters
+2. The JMeter container (`justb4/jmeter:latest` by default) runs with its entrypoint overridden
+3. The `.jmx` test plan is mounted into the container
+4. Results are parsed from JMeter's JTL output and emitted as `@@RESULT@@` lines
+5. A summary is emitted at the end with error rate and latency percentiles
+6. The run fails if the error rate exceeds `errorThreshold`
+
+### Parameters
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `testPlan` | Yes | — | Path to the `.jmx` test plan file |
+| `image` | No | `justb4/jmeter:latest` | JMeter Docker image |
+| `threads` | No | `10` | Number of concurrent threads |
+| `rampUp` | No | `5` | Ramp-up period in seconds |
+| `loops` | No | `3` | Loop count per thread |
+| `duration` | No | — | Duration-based test in seconds (overrides `loops`) |
+| `errorThreshold` | No | `10` | Maximum error rate (%) before the run fails |
+| `properties` | No | — | Key-value pairs passed as JMeter `-J` properties |
+
+### Result Events
+
+Each JMeter sample emits a `result` event with:
+
+```typescript
+{
+  label: "HTTP Request",
+  url: "http://api:3000/endpoint",
+  responseCode: "200",
+  responseMessage: "OK",
+  threadName: "Thread Group 1-1",
+  bytes: 1234,
+  sentBytes: 56,
+  connectTime: 12,
+  latency: 45,
+}
+```
+
+### Summary
+
+The summary includes aggregated metrics:
+
+```typescript
+{
+  type: "summary",
+  errorRate: 2.5,
+  avgDuration: 120,
+  minDuration: 15,
+  maxDuration: 890,
+  p90Duration: 250,
+  p95Duration: 450,
+}
+```
+
+### Use Cases
+
+- Performance regression testing: catch latency regressions between builds
+- Load testing: verify your service handles expected concurrency
+- Stress testing: find breaking points with high thread counts
+- External API testing: test third-party APIs without spinning up services
+
+---
 
 ## Custom Container Tests
 

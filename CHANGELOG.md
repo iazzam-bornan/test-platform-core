@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-05
+
+### Added
+
+- First-class JMeter load testing support via `JmeterTest` in the `TestConfig` union
+- Declarative `jmeter` config: specify `testPlan`, `threads`, `rampUp`, `loops`, `duration`, `errorThreshold`, and custom `-J` properties
+- Auto-generated shell script with JMeter image entrypoint override and test plan mounting
+- Structured `@@RESULT@@` output parsing with fields: `label`, `url`, `responseCode`, `responseMessage`, `threadName`, `bytes`, `sentBytes`, `connectTime`, `latency`
+- JMeter summary metrics: `errorRate`, `avgDuration`, `minDuration`, `maxDuration`, `p90Duration`, `p95Duration`
+- Configurable JMeter Docker image (default: `justb4/jmeter:latest`)
+
 ## [0.1.0] - 2026-04-05
 
 ### Added

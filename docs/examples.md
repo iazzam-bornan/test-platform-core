@@ -187,6 +187,63 @@ const run = await platform.createRun({
 })
 ```
 
+## Load Testing with JMeter
+
+```typescript
+const run = await platform.createRun({
+  services: {
+    api: {
+      image: "myorg/api:latest",
+      ports: [{ container: 3000, host: 3000 }],
+      healthcheck: { type: "http", path: "/health", port: 3000 },
+    },
+  },
+  test: {
+    jmeter: {
+      testPlan: "./jmeter/api-load-test.jmx",
+      threads: 50,
+      rampUp: 10,
+      loops: 5,
+      errorThreshold: 5,
+      properties: {
+        HOST: "api",
+        PORT: "3000",
+        PROTOCOL: "http",
+      },
+    },
+  },
+  cleanup: {
+    onPass: "destroy",
+    onFail: "preserve",
+  },
+})
+```
+
+## JMeter Load Test Against an External API (No Services)
+
+No `services` or `infra` needed — just point JMeter at an external target:
+
+```typescript
+const run = await platform.createRun({
+  services: {},
+  test: {
+    jmeter: {
+      testPlan: "./jmeter/external-api.jmx",
+      threads: 100,
+      rampUp: 30,
+      duration: 120,
+      errorThreshold: 2,
+      image: "justb4/jmeter:latest",
+      properties: {
+        HOST: "api.example.com",
+        PORT: "443",
+        PROTOCOL: "https",
+      },
+    },
+  },
+})
+```
+
 ## Parallel Runs for Flakiness Detection
 
 ```typescript

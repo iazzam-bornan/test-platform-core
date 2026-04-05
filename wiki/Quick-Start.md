@@ -128,4 +128,6 @@ const run = await platform.createRun({
 - [Architecture Overview](Architecture-Overview) — Understand how the platform works
 - [Service Configuration](Service-Configuration) — All service options
 - [Healthchecks](Healthchecks) — HTTP, TCP, and command checks
+- [Test Configuration](Test-Configuration) — HTTP checks, JMeter load tests, and custom containers
+- [JMeter Load Testing](JMeter-Load-Testing) — Built-in JMeter support for performance testing
 - [Examples](Examples) — Real-world test configurations

@@ -134,7 +134,9 @@ You should see:
 
 ## Next Steps
 
-- [Configuration Reference](./configuration.md) — All config options in detail
+- [Configuration Reference](./configuration.md) — All config options in detail, including JMeter load testing
 - [Storage Backends](./storage.md) — Persisting run data
 - [Events & Monitoring](./events.md) — Real-time event system
 - [API Reference](./api-reference.md) — Complete class and method docs
+
+> **Tip:** If you need load testing, check out the built-in [JMeter support](./configuration.md#jmetertest). Declare a `.jmx` test plan and the platform handles the rest — no shell wrappers needed.

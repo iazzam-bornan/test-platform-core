@@ -8,6 +8,7 @@ A TypeScript library for orchestrating Docker-based test environments. Define se
 - **Docker Compose orchestration** — Automatically generates and manages Compose stacks per run
 - **Health-aware scheduling** — Waits for all services to pass healthchecks before running tests
 - **Built-in HTTP testing** — Point at URLs and get automated multi-iteration HTTP checks out of the box
+- **JMeter load testing** — First-class Apache JMeter support with auto-generated scripts and structured results
 - **Custom test containers** — Bring your own test image with arbitrary commands
 - **Real-time events** — Stream status updates, logs, and test results as they happen
 - **Pluggable storage** — In-memory (default) or SQLite persistence, or implement your own
@@ -105,7 +106,7 @@ The top-level configuration object for a test run.
 interface RunConfig {
   services: Record<string, ServiceConfig>  // Application services to test
   infra?: Record<string, ServiceConfig>    // Infrastructure dependencies
-  test: TestConfig                          // Test definition
+  test: TestConfig                          // Test definition (HTTP checks, JMeter, or custom)
   cleanup?: CleanupConfig                   // Post-run behavior
 }
 ```
@@ -142,7 +143,7 @@ Three healthcheck types are supported:
 
 ### TestConfig
 
-Either built-in HTTP checks or a custom container:
+HTTP checks, JMeter load tests, or a custom container:
 
 ```typescript
 // HTTP checks — automated URL testing
@@ -150,6 +151,18 @@ Either built-in HTTP checks or a custom container:
   httpChecks: ["http://api:3000/health"],
   iterations: 10,   // default: 10
   delayMs: 1000,     // default: 1000
+}
+
+// JMeter load test — declarative performance testing
+{
+  jmeter: {
+    testPlan: "./tests/load-test.jmx",
+    threads: 20,
+    rampUp: 10,
+    loops: 5,
+    errorThreshold: 5,
+    properties: { HOST: "api", PORT: "3000" },
+  },
 }
 
 // Custom container — bring your own test runner
@@ -264,6 +277,7 @@ src/
   run.ts            # Run class — full lifecycle management
   docker.ts         # Docker/Compose operations and helpers
   test-script.ts    # HTTP test script generator
+  jmeter.ts         # JMeter test script generator
   storage/
     memory.ts       # In-memory storage implementation
     sqlite.ts       # SQLite storage implementation (Bun)

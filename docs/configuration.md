@@ -10,7 +10,7 @@ The top-level configuration object passed to `platform.createRun()`.
 interface RunConfig {
   services: Record<string, ServiceConfig>  // Required: application services
   infra?: Record<string, ServiceConfig>    // Optional: infrastructure dependencies
-  test: TestConfig                          // Required: test definition
+  test: TestConfig                          // Required: test definition (HTTP, JMeter, or custom)
   cleanup?: CleanupConfig                   // Optional: post-run behavior
 }
 ```
@@ -152,7 +152,7 @@ Uses `nc` (netcat) under the hood.
 
 ## TestConfig
 
-A union type — either `HttpCheckTest` or `CustomContainerTest`.
+A union type — `HttpCheckTest`, `JmeterTest`, or `CustomContainerTest`.
 
 ### HttpCheckTest
 
@@ -173,6 +173,56 @@ interface HttpCheckTest {
 - Exit code 0 if all checks passed, 1 if any failed
 
 **URL format:** Use Docker Compose service names as hostnames. For example, if your service is named `api`, use `http://api:3000/endpoint`.
+
+### JmeterTest
+
+Declarative Apache JMeter load testing. The platform auto-generates a shell script, overrides the JMeter image entrypoint, and mounts the test plan.
+
+```typescript
+interface JmeterTest {
+  jmeter: {
+    testPlan: string                      // Path to .jmx file (required)
+    image?: string                        // Docker image (default: "justb4/jmeter:latest")
+    threads?: number                      // Concurrent threads (default: 10)
+    rampUp?: number                       // Ramp-up period in seconds (default: 5)
+    loops?: number                        // Loop count per thread (default: 3)
+    duration?: number                     // Duration-based test in seconds (optional, overrides loops)
+    errorThreshold?: number               // Max error rate percentage before failing (default: 10)
+    properties?: Record<string, string>   // JMeter -J properties passed to the test plan
+  }
+}
+```
+
+**How it works:**
+- The platform generates a wrapper script that invokes JMeter with your test plan and parameters
+- The JMeter image entrypoint is overridden to execute the generated script
+- Results are parsed from JMeter's JTL output and emitted as `@@RESULT@@` lines
+- A summary with error rate, latency percentiles, and throughput is emitted at the end
+- The run fails if the error rate exceeds `errorThreshold`
+
+**Result fields:** `label`, `url`, `responseCode`, `responseMessage`, `threadName`, `bytes`, `sentBytes`, `connectTime`, `latency`
+
+**Summary fields:** `errorRate`, `avgDuration`, `minDuration`, `maxDuration`, `p90Duration`, `p95Duration`
+
+**Example:**
+```typescript
+{
+  jmeter: {
+    testPlan: "./tests/api-load.jmx",
+    threads: 50,
+    rampUp: 10,
+    loops: 5,
+    errorThreshold: 5,
+    properties: {
+      HOST: "api",
+      PORT: "3000",
+      PROTOCOL: "http",
+    },
+  },
+}
+```
+
+---
 
 ### CustomContainerTest
 

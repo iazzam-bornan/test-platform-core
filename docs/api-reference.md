@@ -209,7 +209,7 @@ type Healthcheck =
 ### TestConfig
 
 ```typescript
-type TestConfig = HttpCheckTest | CustomContainerTest
+type TestConfig = HttpCheckTest | JmeterTest | CustomContainerTest
 ```
 
 ### HttpCheckTest
@@ -221,6 +221,27 @@ interface HttpCheckTest {
   delayMs?: number      // default: 1000
 }
 ```
+
+### JmeterTest
+
+```typescript
+interface JmeterTest {
+  jmeter: {
+    testPlan: string                      // Path to .jmx file
+    image?: string                        // default: "justb4/jmeter:latest"
+    threads?: number                      // default: 10
+    rampUp?: number                       // default: 5
+    loops?: number                        // default: 3
+    duration?: number                     // optional, overrides loops
+    errorThreshold?: number               // default: 10 (percent)
+    properties?: Record<string, string>   // JMeter -J properties
+  }
+}
+```
+
+Result fields emitted via `@@RESULT@@` lines: `label`, `url`, `responseCode`, `responseMessage`, `threadName`, `bytes`, `sentBytes`, `connectTime`, `latency`.
+
+Summary fields: `errorRate`, `avgDuration`, `minDuration`, `maxDuration`, `p90Duration`, `p95Duration`.
 
 ### CustomContainerTest
 

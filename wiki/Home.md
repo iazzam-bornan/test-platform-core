@@ -19,6 +19,7 @@ A TypeScript library that lets you define test environments declaratively and or
 - [Service Configuration](Service-Configuration)
 - [Healthchecks](Healthchecks)
 - [Test Configuration](Test-Configuration)
+- [JMeter Load Testing](JMeter-Load-Testing)
 
 ### Advanced Topics
 - [Storage Backends](Storage-Backends)
