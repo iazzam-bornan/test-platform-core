@@ -65,6 +65,7 @@ function execStream(
 
 interface ComposeService {
   image?: string
+  entrypoint?: string[]
   environment?: Record<string, string>
   ports?: string[]
   healthcheck?: { test: string[]; interval: string; timeout: string; retries: number }
@@ -177,6 +178,7 @@ export function generateComposeFile(
     }
   } else {
     testSvc.image = config.test.image
+    if (config.test.entrypoint) testSvc.entrypoint = config.test.entrypoint
     testSvc.command = config.test.command
     if (config.test.env) testSvc.environment = config.test.env
     if (config.test.volumes) testSvc.volumes = config.test.volumes

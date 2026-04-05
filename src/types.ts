@@ -29,6 +29,7 @@ export interface HttpCheckTest {
 
 export interface CustomContainerTest {
   image: string
+  entrypoint?: string[]
   command: string[]
   env?: Record<string, string>
   volumes?: string[]

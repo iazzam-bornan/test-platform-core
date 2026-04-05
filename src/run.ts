@@ -170,6 +170,18 @@ export class Run {
         ports: portMaps[name] ?? {},
       })
     }
+
+    // Include the test runner as a tracked service
+    const testImage = "httpChecks" in this.state.config.test
+      ? "node:20-slim"
+      : this.state.config.test.image
+    services.push({
+      name: "test-runner",
+      image: testImage,
+      health: "unknown",
+      ports: {},
+    })
+
     this.state.services = services
     await this.persist()
 
