@@ -16,14 +16,26 @@ export interface JmeterScriptOptions {
  * 4. Exits 0/1 based on error threshold
  */
 export function generateJmeterScript(opts: JmeterScriptOptions): string {
-  const jProps = Object.entries(opts.properties)
-    .map(([k, v]) => `-J${k}=${v}`)
-    .join(" \\\n  ")
+  // Build jmeter args as a single line to avoid shell escaping issues
+  const jmeterArgs: string[] = [
+    "-n",
+    `-t ${opts.testPlanPath}`,
+    '-l "$RESULTS_DIR/results.csv"',
+    '-j "$RESULTS_DIR/jmeter.log"',
+    `-JTHREADS=${opts.threads}`,
+    `-JRAMP_UP=${opts.rampUp}`,
+    `-JLOOPS=${opts.loops}`,
+  ]
 
-  const threadsProp = `-JTHREADS=${opts.threads}`
-  const rampProp = `-JRAMP_UP=${opts.rampUp}`
-  const loopsProp = `-JLOOPS=${opts.loops}`
-  const durationFlag = opts.duration ? `-JDURATION=${opts.duration}` : ""
+  if (opts.duration) {
+    jmeterArgs.push(`-JDURATION=${opts.duration}`)
+  }
+
+  for (const [k, v] of Object.entries(opts.properties)) {
+    jmeterArgs.push(`-J${k}=${v}`)
+  }
+
+  const jmeterCmd = `jmeter ${jmeterArgs.join(" ")}`
 
   return `#!/bin/sh
 set -e
@@ -36,15 +48,7 @@ echo "Threads: ${opts.threads}, Ramp-up: ${opts.rampUp}s, Loops: ${opts.loops}"
 echo "Error threshold: ${opts.errorThreshold}%"
 echo "========================"
 
-jmeter -n \\
-  -t ${opts.testPlanPath} \\
-  -l "$RESULTS_DIR/results.csv" \\
-  -j "$RESULTS_DIR/jmeter.log" \\
-  ${threadsProp} \\
-  ${rampProp} \\
-  ${loopsProp} \\
-  ${durationFlag ? durationFlag + " \\\\" : "\\\\"}
-  ${jProps ? jProps : ""}
+${jmeterCmd}
 
 echo ""
 echo "JMeter execution complete. Parsing results..."
@@ -70,13 +74,11 @@ tail -n +2 "$RESULTS_DIR/results.csv" | while IFS=',' read -r ts elapsed label r
   else
     okVal="false"
   fi
-  # Clean up values
-  label=$(echo "$label" | sed 's/"/\\\\"/g')
-  rmsg=$(echo "$rmsg" | sed 's/"/\\\\"/g')
-  tname=$(echo "$tname" | sed 's/"/\\\\"/g')
-  urlVal=$(echo "$urlVal" | sed 's/"/\\\\"/g')
-  printf '@@RESULT@@{"label":"%s","url":"%s","status":%s,"ok":%s,"duration":%s,"latency":%s,"connectTime":%s,"bytes":%s,"sentBytes":%s,"threadName":"%s","responseCode":"%s","responseMessage":"%s","timestamp":"%s"}\\n' \\
-    "$label" "$urlVal" "$elapsed" "$okVal" "$elapsed" "\${latencyVal:-0}" "\${connectVal:-0}" "\${bytesVal:-0}" "\${sentBytesVal:-0}" "$tname" "$rcode" "$rmsg" "$ts" >&2
+  label=$(echo "$label" | sed 's/"/\\"/g')
+  rmsg=$(echo "$rmsg" | sed 's/"/\\"/g')
+  tname=$(echo "$tname" | sed 's/"/\\"/g')
+  urlVal=$(echo "$urlVal" | sed 's/"/\\"/g')
+  printf '@@RESULT@@{"label":"%s","url":"%s","status":%s,"ok":%s,"duration":%s,"latency":%s,"connectTime":%s,"bytes":%s,"sentBytes":%s,"threadName":"%s","responseCode":"%s","responseMessage":"%s","timestamp":"%s"}\\n' "$label" "$urlVal" "$elapsed" "$okVal" "$elapsed" "\${latencyVal:-0}" "\${connectVal:-0}" "\${bytesVal:-0}" "\${sentBytesVal:-0}" "$tname" "$rcode" "$rmsg" "$ts" >&2
 done
 
 # Calculate statistics
@@ -96,28 +98,25 @@ BEGIN { min=999999999; max=0; sum=0; count=0 }
   times[count]=v
 }
 END {
-  if(count==0) { print "0 0 0 0 0 0"; exit }
+  if(count==0) { print "0 0 0 0 0"; exit }
   avg=int(sum/count)
-  # Sort for percentiles
   n=count
   for(i=1;i<=n;i++) for(j=i+1;j<=n;j++) if(times[i]>times[j]){t=times[i];times[i]=times[j];times[j]=t}
   p90idx=int(n*0.9); if(p90idx<1) p90idx=1
   p95idx=int(n*0.95); if(p95idx<1) p95idx=1
   p90=times[p90idx]
   p95=times[p95idx]
-  # Throughput: first and last timestamp
   printf "%d %d %d %d %d", avg, min, max, p90, p95
 }')
 
 AVG=$(echo "$STATS" | awk '{print $1}')
-MIN=$(echo "$STATS" | awk '{print $2}')
-MAX=$(echo "$STATS" | awk '{print $3}')
+MIN_VAL=$(echo "$STATS" | awk '{print $2}')
+MAX_VAL=$(echo "$STATS" | awk '{print $3}')
 P90=$(echo "$STATS" | awk '{print $4}')
 P95=$(echo "$STATS" | awk '{print $5}')
 
 # Emit summary
-printf '@@RESULT@@{"type":"summary","totalChecks":%d,"passed":%d,"failed":%d,"passRate":%d,"errorRate":%d,"avgDuration":%d,"minDuration":%d,"maxDuration":%d,"p90Duration":%d,"p95Duration":%d}\\n' \\
-  "$TOTAL" "$PASSED" "$FAILURES" "$PASS_RATE" "$ERROR_RATE" "$AVG" "$MIN" "$MAX" "$P90" "$P95" >&2
+printf '@@RESULT@@{"type":"summary","totalChecks":%d,"passed":%d,"failed":%d,"passRate":%d,"errorRate":%d,"avgDuration":%d,"minDuration":%d,"maxDuration":%d,"p90Duration":%d,"p95Duration":%d}\\n' "$TOTAL" "$PASSED" "$FAILURES" "$PASS_RATE" "$ERROR_RATE" "$AVG" "$MIN_VAL" "$MAX_VAL" "$P90" "$P95" >&2
 
 echo ""
 echo "=== Results ==="
