@@ -28,3 +28,6 @@ bun.lockb
 
 # Coverage
 coverage/
+
+# Turbo
+.turbo/
