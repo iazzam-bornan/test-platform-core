@@ -206,6 +206,14 @@ export class Run {
   }
 
   private async waitForHealth(): Promise<void> {
+    // Skip if there are no infra/service containers to wait on
+    const hasServices = Object.keys(this.state.config.services).length > 0 ||
+      Object.keys(this.state.config.infra ?? {}).length > 0
+    if (!hasServices) {
+      this.log("No services to healthcheck, skipping.")
+      return
+    }
+
     await this.setStatus("waiting_healthy")
     this.log("Waiting for services to become healthy...")
 
