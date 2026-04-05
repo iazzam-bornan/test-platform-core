@@ -24,6 +24,7 @@ import {
   writeFile,
 } from "./docker"
 import { generateTestScript } from "./test-script"
+import { generateJmeterScript } from "./jmeter-script"
 
 const RESULT_PREFIX = "@@RESULT@@"
 
@@ -146,12 +147,31 @@ export class Run {
       this.log(`Generated test script: ${t.httpChecks.length} URLs x ${t.iterations ?? 10} iterations`)
     }
 
+    // Generate JMeter wrapper script if using jmeter config
+    let jmeterScriptPath: string | undefined
+    if ("jmeter" in this.state.config.test) {
+      const jm = this.state.config.test.jmeter
+      const script = generateJmeterScript({
+        testPlanPath: "/tests/test-plan.jmx",
+        threads: jm.threads ?? 10,
+        rampUp: jm.rampUp ?? 5,
+        loops: jm.loops ?? 3,
+        duration: jm.duration,
+        errorThreshold: jm.errorThreshold ?? 10,
+        properties: jm.properties ?? {},
+      })
+      jmeterScriptPath = path.join(this.workspaceDir, "run-jmeter.sh")
+      await writeFile(jmeterScriptPath, script)
+      this.log(`Generated JMeter script: ${jm.threads ?? 10} threads, ${jm.loops ?? 3} loops, ${jm.errorThreshold ?? 10}% threshold`)
+    }
+
     // Generate compose file
     const { yaml, portMaps } = generateComposeFile(
       this.state.config,
       this.id,
       undefined,
-      testScriptPath
+      testScriptPath,
+      jmeterScriptPath
     )
     await writeFile(path.join(this.workspaceDir, "docker-compose.yml"), yaml)
     this.log("Docker Compose file written.")
@@ -172,9 +192,14 @@ export class Run {
     }
 
     // Include the test runner as a tracked service
-    const testImage = "httpChecks" in this.state.config.test
-      ? "node:20-slim"
-      : this.state.config.test.image
+    let testImage: string
+    if ("httpChecks" in this.state.config.test) {
+      testImage = "node:20-slim"
+    } else if ("jmeter" in this.state.config.test) {
+      testImage = this.state.config.test.jmeter.image ?? "justb4/jmeter:latest"
+    } else {
+      testImage = this.state.config.test.image
+    }
     services.push({
       name: "test-runner",
       image: testImage,

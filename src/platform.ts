@@ -86,12 +86,35 @@ export class TestPlatform {
   }
 
   /**
-   * Cancel an active run.
+   * Cancel an active run. Also handles orphaned runs (e.g. after API restart)
+   * by updating their status in storage and attempting to tear down containers.
    */
   async cancelRun(id: string): Promise<void> {
     const run = this.activeRuns.get(id)
     if (run) {
       await run.cancel()
+      return
+    }
+
+    // Orphaned run — not in memory but may be stuck in storage
+    const stored = await this.storage.getRun(id)
+    if (stored) {
+      const terminal = ["passed", "failed", "cancelled", "error"]
+      if (!terminal.includes(stored.status)) {
+        // Try to tear down any lingering containers
+        const { composeDown } = await import("./docker")
+        await composeDown(
+          path.join(this.workspaceDir, id),
+          `tp-${id}`
+        ).catch(() => {})
+
+        // Update status in storage
+        await this.storage.updateRun(id, {
+          status: "cancelled",
+          finishedAt: new Date().toISOString(),
+          logs: [...stored.logs, `[${new Date().toISOString()}] Cancelled (orphaned run after restart)`],
+        })
+      }
     }
   }
 

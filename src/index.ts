@@ -15,6 +15,7 @@ export type {
   Healthcheck,
   HttpCheckTest,
   CustomContainerTest,
+  JmeterTest,
   TestConfig,
   CleanupConfig,
 

@@ -143,7 +143,8 @@ export function generateComposeFile(
   config: RunConfig,
   runId: string,
   testCommand?: string[],
-  testScriptPath?: string
+  testScriptPath?: string,
+  jmeterScriptPath?: string
 ): { yaml: string; portMaps: Record<string, Record<number, number>> } {
   const projectName = `tp-${runId}`
   const services: Record<string, ComposeService> = {}
@@ -176,6 +177,16 @@ export function generateComposeFile(
     if (testScriptPath) {
       testSvc.volumes.push(`${testScriptPath}:/test-script.mjs:ro`)
     }
+  } else if ("jmeter" in config.test) {
+    const jm = config.test.jmeter
+    testSvc.image = jm.image ?? "justb4/jmeter:latest"
+    testSvc.entrypoint = ["/bin/sh"]
+    testSvc.command = ["/tests/run-jmeter.sh"]
+    testSvc.volumes = []
+    if (jmeterScriptPath) {
+      testSvc.volumes.push(`${jmeterScriptPath}:/tests/run-jmeter.sh:ro`)
+    }
+    testSvc.volumes.push(`${jm.testPlan}:/tests/test-plan.jmx:ro`)
   } else {
     testSvc.image = config.test.image
     if (config.test.entrypoint) testSvc.entrypoint = config.test.entrypoint

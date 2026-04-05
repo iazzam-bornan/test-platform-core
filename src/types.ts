@@ -35,7 +35,20 @@ export interface CustomContainerTest {
   volumes?: string[]
 }
 
-export type TestConfig = HttpCheckTest | CustomContainerTest
+export interface JmeterTest {
+  jmeter: {
+    testPlan: string
+    image?: string
+    threads?: number
+    rampUp?: number
+    loops?: number
+    duration?: number
+    errorThreshold?: number
+    properties?: Record<string, string>
+  }
+}
+
+export type TestConfig = HttpCheckTest | CustomContainerTest | JmeterTest
 
 export interface CleanupConfig {
   onPass?: "destroy" | "preserve"   // default "destroy"
@@ -89,6 +102,23 @@ export interface TestResult {
   passed?: number
   failed?: number
   passRate?: number
+  // jmeter fields
+  label?: string
+  responseCode?: string
+  responseMessage?: string
+  threadName?: string
+  bytes?: number
+  sentBytes?: number
+  connectTime?: number
+  latency?: number
+  // jmeter summary fields
+  errorRate?: number
+  avgDuration?: number
+  minDuration?: number
+  maxDuration?: number
+  p90Duration?: number
+  p95Duration?: number
+  throughput?: number
 }
 
 export interface RunState {
