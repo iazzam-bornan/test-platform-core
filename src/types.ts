@@ -89,6 +89,7 @@ export interface RunConfig {
 // ---------------------------------------------------------------------------
 
 export type RunStatus =
+  | "queued"
   | "pending"
   | "booting"
   | "waiting_healthy"
@@ -183,6 +184,20 @@ export interface RunState {
    * runner did not (or could not) emit a plan event.
    */
   plannedTotal?: number
+  /**
+   * For runs in the "queued" status, the 1-indexed position in the queue.
+   * Updated whenever the queue shifts. Undefined for runs that have started.
+   */
+  queuePosition?: number
+}
+
+/**
+ * Snapshot of the platform's queue at a point in time.
+ */
+export interface QueueStatus {
+  active: number
+  queued: number
+  max: number
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +210,7 @@ export interface PlatformEvents {
   "result": (runId: string, result: TestResult) => void
   "service:health": (runId: string, service: string, health: ServiceHealth) => void
   "finished": (runId: string, state: RunState) => void
+  "queue:changed": (status: QueueStatus) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +230,17 @@ export interface Storage {
 // ---------------------------------------------------------------------------
 
 export interface PlatformOptions {
-  workspaceDir?: string  // temp dir for compose files, default os.tmpdir()
-  storage?: Storage      // default: in-memory
+  workspaceDir?: string       // temp dir for compose files, default os.tmpdir()
+  storage?: Storage           // default: in-memory
+  /**
+   * Maximum number of runs that can hold a docker resource slot at once.
+   * When the limit is reached, additional runs are queued (FIFO) until a
+   * slot frees up. Slots are released only after the run's docker stack is
+   * fully torn down (or destroyed, for preserved environments).
+   *
+   * Defaults to 0 (unlimited), which preserves the previous behavior.
+   *
+   * Can be changed at runtime via `platform.setMaxConcurrentRuns(n)`.
+   */
+  maxConcurrentRuns?: number
 }

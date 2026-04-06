@@ -68,6 +68,43 @@ export class Run {
     return { ...this.state }
   }
 
+  /**
+   * Mark this run as queued (called by the platform when no slot is available).
+   * The run does NOT execute until the platform later calls execute().
+   */
+  setQueuedState(queuePosition: number): void {
+    this.state.status = "queued"
+    this.state.queuePosition = queuePosition
+    this.state.logs.push(
+      `[${new Date().toISOString()}] Queued (position ${queuePosition})`
+    )
+  }
+
+  /** Update the queue position label as the queue shifts. */
+  setQueuePosition(position: number): void {
+    if (this.state.status !== "queued") return
+    this.state.queuePosition = position
+  }
+
+  /** Clear the queue position when the run leaves the queue. */
+  clearQueuePosition(): void {
+    this.state.queuePosition = undefined
+  }
+
+  /**
+   * Cancel a run that never started (still in the queue). Sets the run to a
+   * cancelled terminal state without ever invoking docker.
+   */
+  setCancelledFromQueue(): void {
+    this.cancelled = true
+    this.state.status = "cancelled"
+    this.state.queuePosition = undefined
+    this.state.finishedAt = new Date().toISOString()
+    this.state.logs.push(
+      `[${new Date().toISOString()}] Cancelled while queued`
+    )
+  }
+
   /** Cancel the run and tear down containers */
   async cancel(): Promise<void> {
     this.cancelled = true
@@ -144,7 +181,9 @@ export class Run {
       )
       testScriptPath = path.join(this.workspaceDir, "test-script.mjs")
       await writeFile(testScriptPath, script)
-      this.log(`Generated test script: ${t.httpChecks.length} URLs x ${t.iterations ?? 10} iterations`)
+      this.log(
+        `Generated test script: ${t.httpChecks.length} URLs x ${t.iterations ?? 10} iterations`
+      )
     }
 
     // Generate JMeter wrapper script if using jmeter config
@@ -162,7 +201,9 @@ export class Run {
       })
       jmeterScriptPath = path.join(this.workspaceDir, "run-jmeter.sh")
       await writeFile(jmeterScriptPath, script)
-      this.log(`Generated JMeter script: ${jm.threads ?? 10} threads, ${jm.loops ?? 3} loops, ${jm.errorThreshold ?? 10}% threshold`)
+      this.log(
+        `Generated JMeter script: ${jm.threads ?? 10} threads, ${jm.loops ?? 3} loops, ${jm.errorThreshold ?? 10}% threshold`
+      )
     }
 
     // Generate compose file
@@ -198,7 +239,9 @@ export class Run {
     } else if ("jmeter" in this.state.config.test) {
       testImage = this.state.config.test.jmeter.image ?? "justb4/jmeter:latest"
     } else if ("cucumber" in this.state.config.test) {
-      testImage = this.state.config.test.cucumber.image ?? "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
+      testImage =
+        this.state.config.test.cucumber.image ??
+        "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
     } else {
       testImage = this.state.config.test.image
     }
@@ -214,9 +257,13 @@ export class Run {
 
     // Start containers
     this.log("Starting Docker Compose stack...")
-    const result = await composeUp(this.workspaceDir, this.projectName, (line) => {
-      this.log(`[docker] ${line}`)
-    })
+    const result = await composeUp(
+      this.workspaceDir,
+      this.projectName,
+      (line) => {
+        this.log(`[docker] ${line}`)
+      }
+    )
 
     if (result.exitCode !== 0) {
       throw new Error(`Docker Compose up failed: ${result.stderr.slice(-500)}`)
@@ -234,7 +281,8 @@ export class Run {
 
   private async waitForHealth(): Promise<void> {
     // Skip if there are no infra/service containers to wait on
-    const hasServices = Object.keys(this.state.config.services).length > 0 ||
+    const hasServices =
+      Object.keys(this.state.config.services).length > 0 ||
       Object.keys(this.state.config.infra ?? {}).length > 0
     if (!hasServices) {
       this.log("No services to healthcheck, skipping.")

@@ -28,6 +28,7 @@ export type {
   ServiceState,
   ServiceHealth,
   TestResult,
+  QueueStatus,
 
   // Events
   PlatformEvents,

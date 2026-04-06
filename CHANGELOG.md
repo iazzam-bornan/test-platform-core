@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-06
+
+### Added
+
+- **Run queue** with bounded concurrency. Configure via `new TestPlatform({ maxConcurrentRuns: N })` — additional runs beyond the limit are queued FIFO until a slot frees up
+- New `"queued"` status in `RunStatus` for runs waiting for a slot
+- New `RunState.queuePosition` field — 1-indexed position in the queue, updated as the queue shifts
+- New `setMaxConcurrentRuns(n)` method on `TestPlatform` for runtime reconfiguration
+- New `getMaxConcurrentRuns()` and `getQueueStatus()` methods
+- New `QueueStatus` type: `{ active, queued, max }`
+- New `"queue:changed"` platform event emitted whenever the queue or active count changes
+- New "live streaming" protocol bumps for HTTP, JMeter, and Cucumber test runners — results stream as tests run instead of arriving in a batch at the end
+- New `"plan"` event type on `TestResult` — runners declare the expected total upfront via `RunState.plannedTotal` so the UI can render an accurate progress denominator
+
+### Changed
+
+- Slots are released only when a run's docker stack is fully torn down, OR explicitly destroyed via `destroyRun()` for preserved environments. Preserved runs hold their slot until destroyed
+- `cancelRun()` now also handles queued runs — they are removed from the queue and marked cancelled without ever invoking docker
+- `listRuns()` now includes queued runs (in addition to active and stored)
+
+### Removed
+
+- **`createParallelRuns()`** — gone. Callers should loop and call `createRun()` themselves; combined with `maxConcurrentRuns` this gives explicit control over concurrency
+
 ## [0.4.0] - 2026-04-05
 
 ### Added
