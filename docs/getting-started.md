@@ -140,3 +140,5 @@ You should see:
 - [API Reference](./api-reference.md) — Complete class and method docs
 
 > **Tip:** If you need load testing, check out the built-in [JMeter support](./configuration.md#jmetertest). Declare a `.jmx` test plan and the platform handles the rest — no shell wrappers needed.
+
+> **Tip:** For end-to-end browser testing, try the built-in [Cucumber + Playwright support](./configuration.md#cucumbertest). Point at a features directory and write step definitions against a pre-wired `CustomWorld` — the runner image handles `package.json`, `cucumber.js`, the World class, and auto-screenshots on failure.

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-05
+
+### Added
+
+- First-class Cucumber + Playwright E2E testing support via `CucumberTest` in the `TestConfig` union
+- Declarative `cucumber` config: specify `features`, `steps`, `baseUrl`, `browser`, `headless`, `tags`, and custom `env` vars
+- Custom runner image `testplatform/cucumber-runner:latest` (Playwright + Cucumber) with a built-in `CustomWorld` exposing `this.page`, `this.context`, `this.request`, and `this.baseUrl`
+- Zero-boilerplate authoring: users provide only feature files and step definitions — no `package.json`, no `cucumber.js`, no World class
+- TypeScript step definitions supported out of the box via pre-installed `ts-node`
+- Importable `CustomWorld` type from `/runner/support/world` for full intellisense in TypeScript steps
+- Automatic screenshot capture on scenario failure, attached to the Cucumber result
+- Structured `@@RESULT@@` output with nested step details (`keyword`, `text`, `status`, `duration`, `error`)
+- New `TestResult` fields: `feature`, `scenario`, `tags`, `steps`, `attachments`, and `skipped` (on summary)
+- Configurable browser engines: `chromium` (default), `firefox`, `webkit`
+- Cucumber `--tags` filter support for running subsets of scenarios
+
 ## [0.2.0] - 2026-04-05
 
 ### Added

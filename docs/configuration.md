@@ -10,7 +10,7 @@ The top-level configuration object passed to `platform.createRun()`.
 interface RunConfig {
   services: Record<string, ServiceConfig>  // Required: application services
   infra?: Record<string, ServiceConfig>    // Optional: infrastructure dependencies
-  test: TestConfig                          // Required: test definition (HTTP, JMeter, or custom)
+  test: TestConfig                          // Required: test definition (HTTP, JMeter, Cucumber, or custom)
   cleanup?: CleanupConfig                   // Optional: post-run behavior
 }
 ```
@@ -152,7 +152,7 @@ Uses `nc` (netcat) under the hood.
 
 ## TestConfig
 
-A union type — `HttpCheckTest`, `JmeterTest`, or `CustomContainerTest`.
+A union type — `HttpCheckTest`, `JmeterTest`, `CucumberTest`, or `CustomContainerTest`.
 
 ### HttpCheckTest
 
@@ -217,6 +217,89 @@ interface JmeterTest {
       HOST: "api",
       PORT: "3000",
       PROTOCOL: "http",
+    },
+  },
+}
+```
+
+---
+
+### CucumberTest
+
+Declarative BDD browser testing with Cucumber + Playwright. The platform runs a managed runner image that exposes a ready-to-use `CustomWorld` — users only supply feature files and step definitions.
+
+```typescript
+interface CucumberTest {
+  cucumber: {
+    features: string                              // Host path to the features directory (required)
+    steps?: string                                // Host path to the step definitions directory
+    image?: string                                // Docker image (default: "testplatform/cucumber-runner:latest")
+    baseUrl?: string                              // Injected as BASE_URL env var; available as this.baseUrl
+    browser?: "chromium" | "firefox" | "webkit"   // default: "chromium"
+    headless?: boolean                            // default: true
+    tags?: string                                 // Cucumber --tags expression (e.g. "@smoke and not @wip")
+    env?: Record<string, string>                  // Additional environment variables
+  }
+}
+```
+
+**How it works:**
+- The platform mounts your `features` and `steps` directories into the runner container
+- The runner image ships a built-in `CustomWorld` class, `cucumber.js` config, `package.json`, and `ts-node` — you provide zero boilerplate
+- Before each scenario, the World spins up a Playwright browser, context, page, and API request context
+- Step definitions access these via `this.page`, `this.context`, `this.request`, and `this.baseUrl`
+- On scenario failure, a screenshot is captured automatically and attached to the Cucumber result
+- Results are streamed via `@@RESULT@@` lines with nested step details (keyword, text, status, duration, error)
+- The run fails if any scenario fails
+
+**Managed by the runner image:**
+- `package.json`, `cucumber.js`, `tsconfig.json` — no need to ship them
+- The `CustomWorld` class at `/runner/support/world` (importable as a type in TypeScript steps)
+- Auto-screenshot on failure (attached as a PNG in the `attachments` field of the result)
+- `ts-node` is pre-installed so you can write step definitions in `.ts`
+
+**Writing step definitions** (TypeScript):
+
+```typescript
+import { Given, When, Then } from "@cucumber/cucumber"
+import { expect } from "@playwright/test"
+import type { CustomWorld } from "/runner/support/world"
+
+Given("I visit the homepage", async function (this: CustomWorld) {
+  await this.page.goto(this.baseUrl)
+})
+
+Then("I should see {string}", async function (this: CustomWorld, text: string) {
+  await expect(this.page.getByText(text)).toBeVisible()
+})
+```
+
+**Building the runner image:**
+
+The runner image must be available on the Docker host before starting a run. Build it locally:
+
+```bash
+docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+```
+
+Or pull it from your registry and override `image` in the config.
+
+**Result fields:** `feature`, `scenario`, `tags`, `status`, `duration`, `error`, `steps` (array of `{ keyword, text, status, duration, error? }`), `attachments` (array of `{ mimeType, data }`).
+
+**Summary fields:** `totalChecks`, `passed`, `failed`, `skipped`, `passRate`.
+
+**Example:**
+```typescript
+{
+  cucumber: {
+    features: "./tests/features",
+    steps: "./tests/steps",
+    baseUrl: "http://web:80",
+    browser: "chromium",
+    headless: true,
+    tags: "@smoke and not @wip",
+    env: {
+      API_URL: "http://api:3000",
     },
   },
 }

@@ -9,6 +9,7 @@ A TypeScript library for orchestrating Docker-based test environments. Define se
 - **Health-aware scheduling** — Waits for all services to pass healthchecks before running tests
 - **Built-in HTTP testing** — Point at URLs and get automated multi-iteration HTTP checks out of the box
 - **JMeter load testing** — First-class Apache JMeter support with auto-generated scripts and structured results
+- **Cucumber + Playwright E2E** — First-class BDD browser testing with a managed World class, auto-screenshots on failure, and structured step results
 - **Custom test containers** — Bring your own test image with arbitrary commands
 - **Real-time events** — Stream status updates, logs, and test results as they happen
 - **Pluggable storage** — In-memory (default) or SQLite persistence, or implement your own
@@ -143,7 +144,7 @@ Three healthcheck types are supported:
 
 ### TestConfig
 
-HTTP checks, JMeter load tests, or a custom container:
+HTTP checks, JMeter load tests, Cucumber + Playwright E2E tests, or a custom container:
 
 ```typescript
 // HTTP checks — automated URL testing
@@ -162,6 +163,18 @@ HTTP checks, JMeter load tests, or a custom container:
     loops: 5,
     errorThreshold: 5,
     properties: { HOST: "api", PORT: "3000" },
+  },
+}
+
+// Cucumber + Playwright — declarative BDD browser testing
+{
+  cucumber: {
+    features: "./tests/features",
+    steps: "./tests/steps",
+    baseUrl: "http://web:80",
+    browser: "chromium",
+    headless: true,
+    tags: "@smoke",
   },
 }
 
@@ -278,6 +291,9 @@ src/
   docker.ts         # Docker/Compose operations and helpers
   test-script.ts    # HTTP test script generator
   jmeter.ts         # JMeter test script generator
+  cucumber.ts       # Cucumber runner integration (uses the external
+                    # testplatform/cucumber-runner image — a Playwright +
+                    # Cucumber image with a managed World class)
   storage/
     memory.ts       # In-memory storage implementation
     sqlite.ts       # SQLite storage implementation (Bun)

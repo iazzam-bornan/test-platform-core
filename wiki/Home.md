@@ -20,6 +20,7 @@ A TypeScript library that lets you define test environments declaratively and or
 - [Healthchecks](Healthchecks)
 - [Test Configuration](Test-Configuration)
 - [JMeter Load Testing](JMeter-Load-Testing)
+- [Cucumber + Playwright Testing](Test-Configuration#cucumber--playwright-tests)
 
 ### Advanced Topics
 - [Storage Backends](Storage-Backends)

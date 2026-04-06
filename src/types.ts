@@ -48,7 +48,20 @@ export interface JmeterTest {
   }
 }
 
-export type TestConfig = HttpCheckTest | CustomContainerTest | JmeterTest
+export interface CucumberTest {
+  cucumber: {
+    features: string                                    // host path to features dir
+    steps?: string                                      // host path to steps dir
+    image?: string                                      // default "testplatform/cucumber-runner:latest"
+    baseUrl?: string                                    // injected as BASE_URL env var
+    browser?: "chromium" | "firefox" | "webkit"         // default "chromium"
+    headless?: boolean                                  // default true
+    tags?: string                                       // --tags filter
+    env?: Record<string, string>                       // additional env vars
+  }
+}
+
+export type TestConfig = HttpCheckTest | CustomContainerTest | JmeterTest | CucumberTest
 
 export interface CleanupConfig {
   onPass?: "destroy" | "preserve"   // default "destroy"
@@ -119,6 +132,27 @@ export interface TestResult {
   p90Duration?: number
   p95Duration?: number
   throughput?: number
+  // cucumber fields
+  feature?: string
+  scenario?: string
+  tags?: string[]
+  steps?: CucumberStepResult[]
+  attachments?: CucumberAttachment[]
+  // cucumber summary extras
+  skipped?: number
+}
+
+export interface CucumberStepResult {
+  keyword: string
+  text: string
+  status: string
+  duration: number
+  error?: string
+}
+
+export interface CucumberAttachment {
+  mimeType: string
+  data: string
 }
 
 export interface RunState {

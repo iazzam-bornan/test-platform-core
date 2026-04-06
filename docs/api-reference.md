@@ -209,7 +209,7 @@ type Healthcheck =
 ### TestConfig
 
 ```typescript
-type TestConfig = HttpCheckTest | JmeterTest | CustomContainerTest
+type TestConfig = HttpCheckTest | JmeterTest | CucumberTest | CustomContainerTest
 ```
 
 ### HttpCheckTest
@@ -242,6 +242,35 @@ interface JmeterTest {
 Result fields emitted via `@@RESULT@@` lines: `label`, `url`, `responseCode`, `responseMessage`, `threadName`, `bytes`, `sentBytes`, `connectTime`, `latency`.
 
 Summary fields: `errorRate`, `avgDuration`, `minDuration`, `maxDuration`, `p90Duration`, `p95Duration`.
+
+### CucumberTest
+
+```typescript
+interface CucumberTest {
+  cucumber: {
+    features: string                              // Host path to features directory
+    steps?: string                                // Host path to step definitions directory
+    image?: string                                // default: "testplatform/cucumber-runner:latest"
+    baseUrl?: string                              // Injected as BASE_URL; exposed as this.baseUrl in steps
+    browser?: "chromium" | "firefox" | "webkit"   // default: "chromium"
+    headless?: boolean                            // default: true
+    tags?: string                                 // Cucumber --tags filter
+    env?: Record<string, string>                  // Additional env vars
+  }
+}
+```
+
+The runner image (`testplatform/cucumber-runner:latest`) is a Playwright + Cucumber image with a built-in `CustomWorld` that exposes `this.page`, `this.context`, `this.request`, and `this.baseUrl` to every step. Users only provide feature files and step definitions — no `package.json`, no `cucumber.js`, no World class. Step definitions can import `CustomWorld` as a type from `/runner/support/world`. TypeScript steps are supported via pre-installed `ts-node`. Screenshots are captured automatically on scenario failure and attached to the result.
+
+Build the runner image locally before running:
+
+```bash
+docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+```
+
+Result fields emitted via `@@RESULT@@` lines: `feature`, `scenario`, `tags`, `status`, `duration`, `error`, `steps` (array of `{ keyword, text, status, duration, error? }`), `attachments` (array of `{ mimeType, data }`).
+
+Summary fields: `totalChecks`, `passed`, `failed`, `skipped`, `passRate`.
 
 ### CustomContainerTest
 
@@ -322,7 +351,7 @@ type ServiceHealth = "unknown" | "starting" | "healthy" | "unhealthy"
 interface TestResult {
   url?: string
   iteration?: number
-  status?: number
+  status?: number | string
   ok?: boolean
   duration?: number
   timestamp?: string
@@ -332,7 +361,24 @@ interface TestResult {
   totalChecks?: number
   passed?: number
   failed?: number
+  skipped?: number
   passRate?: number
+
+  // Cucumber-specific fields
+  feature?: string
+  scenario?: string
+  tags?: string[]
+  steps?: Array<{
+    keyword: string
+    text: string
+    status: string
+    duration: number
+    error?: string
+  }>
+  attachments?: Array<{
+    mimeType: string
+    data: string
+  }>
 }
 ```
 

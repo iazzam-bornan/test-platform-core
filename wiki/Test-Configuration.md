@@ -1,6 +1,6 @@
 # Test Configuration
 
-Tests define what runs against your services after they're all healthy. There are three test modes: built-in HTTP checks, JMeter load tests, and custom container tests.
+Tests define what runs against your services after they're all healthy. There are four test modes: built-in HTTP checks, JMeter load tests, Cucumber + Playwright E2E tests, and custom container tests.
 
 ## HTTP Checks (Built-in)
 
@@ -155,6 +155,125 @@ The summary includes aggregated metrics:
 - Load testing: verify your service handles expected concurrency
 - Stress testing: find breaking points with high thread counts
 - External API testing: test third-party APIs without spinning up services
+
+---
+
+## Cucumber + Playwright Tests
+
+First-class BDD browser testing. The platform uses a managed runner image (`testplatform/cucumber-runner:latest`) that bundles Playwright, Cucumber, and a pre-wired `CustomWorld`. You only provide feature files and step definitions — everything else (`package.json`, `cucumber.js`, the World class, `ts-node`) is handled by the image.
+
+```typescript
+{
+  test: {
+    cucumber: {
+      features: "./tests/features",     // host path to .feature files
+      steps: "./tests/steps",           // host path to step definitions
+      baseUrl: "http://web:80",         // exposed as this.baseUrl
+      browser: "chromium",              // default: "chromium"
+      headless: true,                   // default: true
+      tags: "@smoke and not @wip",      // Cucumber --tags filter
+      env: {                            // additional env vars
+        API_URL: "http://api:3000",
+      },
+    },
+  },
+}
+```
+
+### How It Works
+
+1. The platform mounts your `features` and `steps` directories into the runner container
+2. Before each scenario, the built-in World spins up a Playwright browser, context, page, and API request context
+3. Step definitions access `this.page`, `this.context`, `this.request`, and `this.baseUrl`
+4. On scenario failure, a screenshot is captured automatically and attached to the result
+5. Results are streamed via `@@RESULT@@` lines with nested step details
+6. The run fails if any scenario fails
+
+### Parameters
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `features` | Yes | — | Host path to the features directory |
+| `steps` | No | — | Host path to the step definitions directory |
+| `image` | No | `testplatform/cucumber-runner:latest` | Runner Docker image |
+| `baseUrl` | No | — | Injected as `BASE_URL`; exposed as `this.baseUrl` in steps |
+| `browser` | No | `chromium` | One of `chromium`, `firefox`, `webkit` |
+| `headless` | No | `true` | Whether to run browsers headless |
+| `tags` | No | — | Cucumber `--tags` expression |
+| `env` | No | — | Additional environment variables |
+
+### Building the Runner Image
+
+The runner image must be available on the Docker host before starting a run. Build it once:
+
+```bash
+docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+```
+
+Or pull it from your registry and override `image` in the config.
+
+### Writing Step Definitions
+
+TypeScript is supported out of the box via pre-installed `ts-node`. Import `CustomWorld` as a type from `/runner/support/world` to get full intellisense:
+
+```typescript
+import { Given, When, Then } from "@cucumber/cucumber"
+import { expect } from "@playwright/test"
+import type { CustomWorld } from "/runner/support/world"
+
+Given("I visit the homepage", async function (this: CustomWorld) {
+  await this.page.goto(this.baseUrl)
+})
+
+Then("I should see {string}", async function (this: CustomWorld, text: string) {
+  await expect(this.page.getByText(text)).toBeVisible()
+})
+```
+
+You do **not** need to ship a `package.json`, `cucumber.js`, or a World class — the runner image provides all of these. Just drop your `.feature` and `.steps.ts` (or `.js`) files into the mounted directories.
+
+### Result Events
+
+Each scenario emits a `result` event:
+
+```typescript
+{
+  feature: "Login",
+  scenario: "User can log in with valid credentials",
+  tags: ["@smoke"],
+  status: "passed",
+  duration: 1820,
+  steps: [
+    { keyword: "Given ", text: "I visit the homepage", status: "passed", duration: 340 },
+    { keyword: "When ", text: 'I click "Sign in"', status: "passed", duration: 120 },
+    { keyword: "Then ", text: 'I should see "Welcome back"', status: "passed", duration: 85 },
+  ],
+  attachments: [
+    // Only present on failure — PNG screenshot of the page at the point of failure
+    // { mimeType: "image/png", data: "<base64>" },
+  ],
+}
+```
+
+### Summary
+
+```typescript
+{
+  type: "summary",
+  totalChecks: 12,
+  passed: 11,
+  failed: 1,
+  skipped: 0,
+  passRate: 91.67,
+}
+```
+
+### Use Cases
+
+- End-to-end browser testing for web apps
+- BDD-driven acceptance tests shared with non-engineers
+- Smoke tests across full-stack environments (frontend + backend + infra)
+- Regression suites that need to exercise real UI flows
 
 ---
 

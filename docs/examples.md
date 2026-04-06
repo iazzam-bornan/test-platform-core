@@ -244,6 +244,119 @@ const run = await platform.createRun({
 })
 ```
 
+## E2E Testing with Cucumber + Playwright
+
+A full-stack app (frontend, backend, Mongo, Redis) driven by BDD scenarios. The Cucumber runner image ships with Playwright and a managed `CustomWorld` — just point it at your features and steps.
+
+```typescript
+const run = await platform.createRun({
+  infra: {
+    mongo: {
+      image: "mongo:7",
+      env: {
+        MONGO_INITDB_ROOT_USERNAME: "root",
+        MONGO_INITDB_ROOT_PASSWORD: "root",
+      },
+      ports: [{ container: 27017 }],
+      healthcheck: {
+        type: "command",
+        command: ["mongosh", "--eval", "db.adminCommand('ping')"],
+        interval: 5,
+        retries: 10,
+      },
+    },
+    redis: {
+      image: "redis:7-alpine",
+      ports: [{ container: 6379 }],
+      healthcheck: { type: "tcp", port: 6379 },
+    },
+  },
+  services: {
+    api: {
+      image: "myorg/api:latest",
+      env: {
+        MONGO_URL: "mongodb://root:root@mongo:27017",
+        REDIS_URL: "redis://redis:6379",
+        NODE_ENV: "test",
+      },
+      ports: [{ container: 3000 }],
+      healthcheck: { type: "http", path: "/health", port: 3000 },
+      dependsOn: ["mongo", "redis"],
+    },
+    web: {
+      image: "myorg/web:latest",
+      env: {
+        API_URL: "http://api:3000",
+      },
+      ports: [{ container: 80, host: 8080 }],
+      healthcheck: { type: "http", path: "/", port: 80 },
+      dependsOn: ["api"],
+    },
+  },
+  test: {
+    cucumber: {
+      features: "./e2e/features",
+      steps: "./e2e/steps",
+      baseUrl: "http://web:80",
+      browser: "chromium",
+      headless: true,
+      tags: "@smoke",
+      env: {
+        API_URL: "http://api:3000",
+      },
+    },
+  },
+  cleanup: {
+    onPass: "destroy",
+    onFail: "preserve",
+  },
+})
+```
+
+**`e2e/features/login.feature`:**
+```gherkin
+@smoke
+Feature: Login
+
+  Scenario: User can log in with valid credentials
+    Given I visit the homepage
+    When I click "Sign in"
+    And I fill in "email" with "test@example.com"
+    And I fill in "password" with "secret"
+    And I click "Log in"
+    Then I should see "Welcome back"
+```
+
+**`e2e/steps/login.steps.ts`:**
+```typescript
+import { Given, When, Then } from "@cucumber/cucumber"
+import { expect } from "@playwright/test"
+import type { CustomWorld } from "/runner/support/world"
+
+Given("I visit the homepage", async function (this: CustomWorld) {
+  await this.page.goto(this.baseUrl)
+})
+
+When("I click {string}", async function (this: CustomWorld, label: string) {
+  await this.page.getByRole("button", { name: label }).click()
+})
+
+When("I fill in {string} with {string}", async function (this: CustomWorld, field: string, value: string) {
+  await this.page.getByLabel(field).fill(value)
+})
+
+Then("I should see {string}", async function (this: CustomWorld, text: string) {
+  await expect(this.page.getByText(text)).toBeVisible()
+})
+```
+
+Screenshots on scenario failure are captured automatically and attached to the Cucumber result — no extra hooks needed.
+
+> **Note:** Build the runner image once before running:
+> ```bash
+> docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+> ```
+
 ## Parallel Runs for Flakiness Detection
 
 ```typescript

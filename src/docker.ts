@@ -187,6 +187,21 @@ export function generateComposeFile(
       testSvc.volumes.push(`${jmeterScriptPath}:/tests/run-jmeter.sh:ro`)
     }
     testSvc.volumes.push(`${jm.testPlan}:/tests/test-plan.jmx:ro`)
+  } else if ("cucumber" in config.test) {
+    const cu = config.test.cucumber
+    testSvc.image = cu.image ?? "testplatform/cucumber-runner:latest"
+    // Use the image's built-in entrypoint — no override needed
+    testSvc.environment = {
+      BASE_URL: cu.baseUrl ?? "http://localhost",
+      BROWSER: cu.browser ?? "chromium",
+      HEADLESS: cu.headless === false ? "false" : "true",
+      ...(cu.tags ? { TAGS: cu.tags } : {}),
+      ...(cu.env ?? {}),
+    }
+    testSvc.volumes = [`${cu.features}:/project/features:ro`]
+    if (cu.steps) {
+      testSvc.volumes.push(`${cu.steps}:/project/steps:ro`)
+    }
   } else {
     testSvc.image = config.test.image
     if (config.test.entrypoint) testSvc.entrypoint = config.test.entrypoint

@@ -16,6 +16,9 @@ export type {
   HttpCheckTest,
   CustomContainerTest,
   JmeterTest,
+  CucumberTest,
+  CucumberStepResult,
+  CucumberAttachment,
   TestConfig,
   CleanupConfig,
 
