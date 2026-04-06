@@ -189,7 +189,7 @@ export function generateComposeFile(
     testSvc.volumes.push(`${jm.testPlan}:/tests/test-plan.jmx:ro`)
   } else if ("cucumber" in config.test) {
     const cu = config.test.cucumber
-    testSvc.image = cu.image ?? "testplatform/cucumber-runner:latest"
+    testSvc.image = cu.image ?? "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
     // Use the image's built-in entrypoint — no override needed
     testSvc.environment = {
       BASE_URL: cu.baseUrl ?? "http://localhost",
@@ -198,9 +198,21 @@ export function generateComposeFile(
       ...(cu.tags ? { TAGS: cu.tags } : {}),
       ...(cu.env ?? {}),
     }
-    testSvc.volumes = [`${cu.features}:/project/features:ro`]
-    if (cu.steps) {
-      testSvc.volumes.push(`${cu.steps}:/project/steps:ro`)
+
+    if (cu.repo) {
+      // Repo mode: clone inside the container, no volumes
+      testSvc.environment.GIT_REPO_URL = cu.repo.url
+      testSvc.environment.GIT_REPO_REF = cu.repo.ref ?? "main"
+      testSvc.environment.MODULES = cu.repo.modules.join(",")
+      if (cu.repo.token) {
+        testSvc.environment.GIT_TOKEN = cu.repo.token
+      }
+    } else if (cu.features) {
+      // Local mode: mount features and steps as volumes
+      testSvc.volumes = [`${cu.features}:/project/features:ro`]
+      if (cu.steps) {
+        testSvc.volumes.push(`${cu.steps}:/project/steps:ro`)
+      }
     }
   } else {
     testSvc.image = config.test.image

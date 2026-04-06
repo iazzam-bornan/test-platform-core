@@ -7,7 +7,8 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "declaration": true
+    "declaration": true,
+    "types": ["bun", "node"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

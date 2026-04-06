@@ -50,14 +50,23 @@ export interface JmeterTest {
 
 export interface CucumberTest {
   cucumber: {
-    features: string                                    // host path to features dir
+    // Mode A: local files
+    features?: string                                   // host path to features dir
     steps?: string                                      // host path to steps dir
-    image?: string                                      // default "testplatform/cucumber-runner:latest"
+    // Mode B: clone from a git repo (modular tests)
+    repo?: {
+      url: string                                       // e.g. "https://github.com/myorg/e2e-tests.git"
+      ref?: string                                      // branch/tag/sha (default "main")
+      modules: string[]                                 // module names to load
+      token?: string                                    // optional auth token for private repos
+    }
+    // Common
+    image?: string                                      // default "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
     baseUrl?: string                                    // injected as BASE_URL env var
     browser?: "chromium" | "firefox" | "webkit"         // default "chromium"
     headless?: boolean                                  // default true
     tags?: string                                       // --tags filter
-    env?: Record<string, string>                       // additional env vars
+    env?: Record<string, string>                        // additional env vars
   }
 }
 

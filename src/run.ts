@@ -198,7 +198,7 @@ export class Run {
     } else if ("jmeter" in this.state.config.test) {
       testImage = this.state.config.test.jmeter.image ?? "justb4/jmeter:latest"
     } else if ("cucumber" in this.state.config.test) {
-      testImage = this.state.config.test.cucumber.image ?? "testplatform/cucumber-runner:latest"
+      testImage = this.state.config.test.cucumber.image ?? "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
     } else {
       testImage = this.state.config.test.image
     }
