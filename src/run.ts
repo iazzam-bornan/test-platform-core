@@ -330,25 +330,23 @@ export class Run {
       throw new Error("Test runner container never started")
     }
 
-    // Stream test runner output -- parse results from stderr
-    const stopStream = streamContainerLogs(
-      containerId,
-      (line) => {
+    // Stream test runner output. `docker logs -f` multiplexes both container
+    // stdout and stderr through its own stdout, so we have to check for the
+    // RESULT_PREFIX in both handlers.
+    const handleLine = (line: string) => {
+      if (line.startsWith(RESULT_PREFIX)) {
+        const json = line.slice(RESULT_PREFIX.length)
+        try {
+          const result: TestResult = JSON.parse(json)
+          this.state.testResults.push(result)
+          this.emitter.emit("result", this.id, result)
+        } catch {}
+      } else {
         this.log(`[test] ${line}`)
-      },
-      (line) => {
-        if (line.startsWith(RESULT_PREFIX)) {
-          const json = line.slice(RESULT_PREFIX.length)
-          try {
-            const result: TestResult = JSON.parse(json)
-            this.state.testResults.push(result)
-            this.emitter.emit("result", this.id, result)
-          } catch {}
-        } else {
-          this.log(`[test] ${line}`)
-        }
       }
-    )
+    }
+
+    const stopStream = streamContainerLogs(containerId, handleLine, handleLine)
 
     // Wait for container to exit
     while (Date.now() - start < 600_000) {
