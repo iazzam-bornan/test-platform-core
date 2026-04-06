@@ -160,7 +160,11 @@ The summary includes aggregated metrics:
 
 ## Cucumber + Playwright Tests
 
-First-class BDD browser testing. The platform uses a managed runner image (`testplatform/cucumber-runner:latest`) that bundles Playwright, Cucumber, and a pre-wired `CustomWorld`. You only provide feature files and step definitions — everything else (`package.json`, `cucumber.js`, the World class, `ts-node`) is handled by the image.
+First-class BDD browser testing. The platform uses a managed runner image (`ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest`) that bundles Playwright and Cucumber. Tests can be supplied in two modes: **local mode** (mount local feature and step directories) or **repo mode** (clone a modular test repo at run time).
+
+### Local Mode
+
+Mount your `features` and `steps` directories — the image supplies `package.json`, `cucumber.js`, a pre-wired `CustomWorld`, and `ts-node`.
 
 ```typescript
 {
@@ -180,7 +184,7 @@ First-class BDD browser testing. The platform uses a managed runner image (`test
 }
 ```
 
-### How It Works
+#### How It Works
 
 1. The platform mounts your `features` and `steps` directories into the runner container
 2. Before each scenario, the built-in World spins up a Playwright browser, context, page, and API request context
@@ -189,28 +193,97 @@ First-class BDD browser testing. The platform uses a managed runner image (`test
 5. Results are streamed via `@@RESULT@@` lines with nested step details
 6. The run fails if any scenario fails
 
+### Repo Mode
+
+When the test suite lives in its own repository, point the runner at a git URL and a list of modules. The runner clones the repo at run time and runs only those modules.
+
+```typescript
+{
+  test: {
+    cucumber: {
+      repo: {
+        url: "https://github.com/iazzam-bornan/taskboard-e2e-tests.git",
+        ref: "main",                    // branch, tag, or SHA (default: "main")
+        modules: ["homepage", "api", "tasks"],
+        token: process.env.GITHUB_TOKEN, // optional, for private repos
+      },
+      baseUrl: "http://frontend:80",
+      browser: "chromium",
+      env: {
+        BACKEND_URL: "http://backend:3000",
+      },
+    },
+  },
+}
+```
+
+#### How It Works
+
+1. The platform sets env vars on the runner: `GIT_REPO_URL`, `GIT_REPO_REF`, `MODULES`, `BASE_URL`, `BROWSER`, `HEADLESS`, optionally `TAGS` and `GIT_TOKEN`, plus any extra `env` keys
+2. The runner clones `GIT_REPO_URL` at `GIT_REPO_REF` into `/project`
+3. If `package.json` exists, the runner runs `npm install`
+4. The runner invokes `npx cucumber-js` from the repo root — the repo's own `cucumber.js` drives the execution
+5. Results are parsed from `RESULTS_FILE` (set to `/results/cucumber.json` by the runner), the same way as in local mode
+
+#### Repo Convention
+
+The cloned repo must follow this layout:
+
+```
+my-e2e-tests/
+├── cucumber.js               # user-owned config that reads MODULES env var
+├── package.json
+├── tsconfig.json
+└── modules/
+    ├── shared/               # always loaded if it exists
+    │   ├── pages/
+    │   └── steps/
+    ├── auth/
+    │   ├── features/         # .feature files (REQUIRED — hard error if missing)
+    │   ├── pages/            # page objects (.ts or .js, optional)
+    │   └── steps/            # step definitions (.ts or .js, optional)
+    └── checkout/
+        ├── features/
+        ├── pages/
+        └── steps/
+```
+
+**Rules:**
+- A module listed in `modules` without a `features/` directory is a hard error
+- `modules/shared/` is always loaded if it exists (by convention in your `cucumber.js`)
+- You **own** your `cucumber.js` — the platform does **not** generate it. It should read the `MODULES` env var (comma- or space-separated) and build the feature/support paths dynamically, and honour `RESULTS_FILE` for output
+- Sample repo: <https://github.com/iazzam-bornan/taskboard-e2e-tests>
+
+**Private repos:** pass an auth token via `repo.token` in TypeScript config — it is forwarded as `GIT_TOKEN` to the runner. In YAML configs, `repo.token` is plaintext — prefer mapping from a host env var via `env` or store the YAML in a secret manager.
+
 ### Parameters
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `features` | Yes | — | Host path to the features directory |
+| `features` | Local mode | — | Host path to the features directory |
 | `steps` | No | — | Host path to the step definitions directory |
-| `image` | No | `testplatform/cucumber-runner:latest` | Runner Docker image |
+| `repo.url` | Repo mode | — | Git clone URL |
+| `repo.ref` | No | `main` | Branch, tag, or SHA |
+| `repo.modules` | Repo mode | — | Module names to load |
+| `repo.token` | No | — | Auth token for private repos (forwarded as `GIT_TOKEN`) |
+| `image` | No | `ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest` | Runner Docker image |
 | `baseUrl` | No | — | Injected as `BASE_URL`; exposed as `this.baseUrl` in steps |
 | `browser` | No | `chromium` | One of `chromium`, `firefox`, `webkit` |
 | `headless` | No | `true` | Whether to run browsers headless |
 | `tags` | No | — | Cucumber `--tags` expression |
 | `env` | No | — | Additional environment variables |
 
-### Building the Runner Image
+Provide either `features` (local mode) **or** `repo` (repo mode) — not both.
 
-The runner image must be available on the Docker host before starting a run. Build it once:
+### Pulling the Runner Image
+
+Pull it once (or let Docker pull on first run):
 
 ```bash
-docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+docker pull ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest
 ```
 
-Or pull it from your registry and override `image` in the config.
+Override `image` in the config to use a fork or pinned tag.
 
 ### Writing Step Definitions
 

@@ -352,10 +352,78 @@ Then("I should see {string}", async function (this: CustomWorld, text: string) {
 
 Screenshots on scenario failure are captured automatically and attached to the Cucumber result — no extra hooks needed.
 
-> **Note:** Build the runner image once before running:
+> **Note:** The runner image is pulled from GHCR on first use:
 > ```bash
-> docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+> docker pull ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest
 > ```
+
+## Modular E2E Tests from a Remote Repo
+
+When your test suite lives in its own repository, use **repo mode** to clone it at run time and execute a subset of its modules. The runner image clones the repo, runs `npm install`, and invokes the repo's own `cucumber.js` — which reads the `MODULES` env var to decide what to load.
+
+This example spins up a taskboard app (frontend + backend + Mongo) and runs only the `homepage`, `api`, and `tasks` modules from the [sample taskboard-e2e-tests repo](https://github.com/iazzam-bornan/taskboard-e2e-tests).
+
+```typescript
+const run = await platform.createRun({
+  infra: {
+    mongo: {
+      image: "mongo:7",
+      env: {
+        MONGO_INITDB_ROOT_USERNAME: "root",
+        MONGO_INITDB_ROOT_PASSWORD: "root",
+      },
+      ports: [{ container: 27017 }],
+      healthcheck: {
+        type: "command",
+        command: ["mongosh", "--eval", "db.adminCommand('ping')"],
+        interval: 5,
+        retries: 10,
+      },
+    },
+  },
+  services: {
+    backend: {
+      image: "myorg/taskboard-api:latest",
+      env: {
+        MONGO_URL: "mongodb://root:root@mongo:27017",
+        NODE_ENV: "test",
+      },
+      ports: [{ container: 3000 }],
+      healthcheck: { type: "http", path: "/health", port: 3000 },
+      dependsOn: ["mongo"],
+    },
+    frontend: {
+      image: "myorg/taskboard-web:latest",
+      env: { API_URL: "http://backend:3000" },
+      ports: [{ container: 80, host: 8080 }],
+      healthcheck: { type: "http", path: "/", port: 80 },
+      dependsOn: ["backend"],
+    },
+  },
+  test: {
+    cucumber: {
+      repo: {
+        url: "https://github.com/iazzam-bornan/taskboard-e2e-tests.git",
+        ref: "main",
+        modules: ["homepage", "api", "tasks"],
+        // token: process.env.GITHUB_TOKEN, // for private repos
+      },
+      baseUrl: "http://frontend:80",
+      browser: "chromium",
+      headless: true,
+      env: {
+        BACKEND_URL: "http://backend:3000",
+      },
+    },
+  },
+  cleanup: {
+    onPass: "destroy",
+    onFail: "preserve",
+  },
+})
+```
+
+**How modules are wired up:** the runner sets `MODULES=homepage,api,tasks` on the container. The repo's own `cucumber.js` reads this and builds its feature/support paths — the platform does **not** generate or modify `cucumber.js`. A module without a `features/` directory is a hard error. The `modules/shared/` directory is always loaded if it exists (by convention in the repo's `cucumber.js`). See the [sample repo](https://github.com/iazzam-bornan/taskboard-e2e-tests) for a working `cucumber.js`.
 
 ## Parallel Runs for Flakiness Detection
 

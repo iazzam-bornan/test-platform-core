@@ -167,6 +167,7 @@ HTTP checks, JMeter load tests, Cucumber + Playwright E2E tests, or a custom con
 }
 
 // Cucumber + Playwright — declarative BDD browser testing
+// Mode A: local features and steps (mounted as volumes)
 {
   cucumber: {
     features: "./tests/features",
@@ -175,6 +176,20 @@ HTTP checks, JMeter load tests, Cucumber + Playwright E2E tests, or a custom con
     browser: "chromium",
     headless: true,
     tags: "@smoke",
+  },
+}
+
+// Mode B: clone a modular test repo at run time
+{
+  cucumber: {
+    repo: {
+      url: "https://github.com/myorg/e2e-tests.git",
+      ref: "main",
+      modules: ["auth", "checkout"],
+      token: process.env.GITHUB_TOKEN, // optional, for private repos
+    },
+    baseUrl: "http://app:3000",
+    browser: "chromium",
   },
 }
 
@@ -292,8 +307,9 @@ src/
   test-script.ts    # HTTP test script generator
   jmeter.ts         # JMeter test script generator
   cucumber.ts       # Cucumber runner integration (uses the external
-                    # testplatform/cucumber-runner image — a Playwright +
-                    # Cucumber image with a managed World class)
+                    # ghcr.io/iazzam-bornan/test-platform-cucumber-runner
+                    # image — a Playwright + Cucumber image that supports
+                    # both local-mount and git-repo modes)
   storage/
     memory.ts       # In-memory storage implementation
     sqlite.ts       # SQLite storage implementation (Bun)

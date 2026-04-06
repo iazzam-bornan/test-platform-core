@@ -248,9 +248,20 @@ Summary fields: `errorRate`, `avgDuration`, `minDuration`, `maxDuration`, `p90Du
 ```typescript
 interface CucumberTest {
   cucumber: {
-    features: string                              // Host path to features directory
+    // Mode A: local files (mounted as volumes)
+    features?: string                             // Host path to features directory
     steps?: string                                // Host path to step definitions directory
-    image?: string                                // default: "testplatform/cucumber-runner:latest"
+
+    // Mode B: clone from a git repo
+    repo?: {
+      url: string                                 // Git clone URL
+      ref?: string                                // Branch/tag/SHA (default: "main")
+      modules: string[]                           // Module names to load
+      token?: string                              // Optional auth token for private repos
+    }
+
+    // Common
+    image?: string                                // default: "ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest"
     baseUrl?: string                              // Injected as BASE_URL; exposed as this.baseUrl in steps
     browser?: "chromium" | "firefox" | "webkit"   // default: "chromium"
     headless?: boolean                            // default: true
@@ -260,12 +271,18 @@ interface CucumberTest {
 }
 ```
 
-The runner image (`testplatform/cucumber-runner:latest`) is a Playwright + Cucumber image with a built-in `CustomWorld` that exposes `this.page`, `this.context`, `this.request`, and `this.baseUrl` to every step. Users only provide feature files and step definitions — no `package.json`, no `cucumber.js`, no World class. Step definitions can import `CustomWorld` as a type from `/runner/support/world`. TypeScript steps are supported via pre-installed `ts-node`. Screenshots are captured automatically on scenario failure and attached to the result.
+Provide either `features` (local mode) **or** `repo` (repo mode) — not both.
 
-Build the runner image locally before running:
+The runner image (`ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest`) is a Playwright + Cucumber image with a built-in `CustomWorld` that exposes `this.page`, `this.context`, `this.request`, and `this.baseUrl` to every step.
+
+**Local mode:** mount your `features` and `steps` directories — the image supplies `package.json`, `cucumber.js`, the World class, and `ts-node`. Step definitions can import `CustomWorld` as a type from `/runner/support/world`. Screenshots are captured automatically on scenario failure and attached to the result.
+
+**Repo mode:** the runner clones `repo.url` at `repo.ref` into `/project`, runs `npm install` if `package.json` exists, and invokes `npx cucumber-js` from the repo root. The repo must follow the `modules/<name>/{features,pages,steps}` convention (a module without `features/` is a hard error). The repo owns its own `cucumber.js`, which should read the `MODULES` env var to pick the right modules and honour `RESULTS_FILE` (set to `/results/cucumber.json`) for output parsing. Sample repo: <https://github.com/iazzam-bornan/taskboard-e2e-tests>.
+
+Pull the runner image before running (or let Docker pull on first use):
 
 ```bash
-docker build -t testplatform/cucumber-runner:latest docker/cucumber-runner
+docker pull ghcr.io/iazzam-bornan/test-platform-cucumber-runner:latest
 ```
 
 Result fields emitted via `@@RESULT@@` lines: `feature`, `scenario`, `tags`, `status`, `duration`, `error`, `steps` (array of `{ keyword, text, status, duration, error? }`), `attachments` (array of `{ mimeType, data }`).
