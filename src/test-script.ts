@@ -53,6 +53,13 @@ async function run() {
   let passed = 0;
   let failed = 0;
 
+  // Emit plan event so the platform knows the expected total upfront
+  emitResult({
+    type: "plan",
+    totalChecks: urls.length * iterations,
+    timestamp: new Date().toISOString(),
+  });
+
   console.log("Running " + urls.length + " checks x " + iterations + " iterations");
   console.log("URLs: " + urls.join(", "));
   console.log("---");

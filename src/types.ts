@@ -112,14 +112,14 @@ export interface ServiceState {
 export interface TestResult {
   url?: string
   iteration?: number
-  status?: number
+  status?: number | string
   ok?: boolean
   duration?: number
   timestamp?: string
   error?: string
   body?: string
-  // summary
-  type?: "summary"
+  // summary or plan
+  type?: "summary" | "plan"
   totalChecks?: number
   passed?: number
   failed?: number
@@ -176,6 +176,13 @@ export interface RunState {
   logs: string[]
   testResults: TestResult[]
   serviceLogs: Record<string, string>
+  /**
+   * Total number of expected test results, declared by the test runner via a
+   * "plan" result event before any actual results stream in. Allows the
+   * frontend to render an accurate progress denominator. Undefined if the
+   * runner did not (or could not) emit a plan event.
+   */
+  plannedTotal?: number
 }
 
 // ---------------------------------------------------------------------------

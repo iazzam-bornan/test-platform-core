@@ -338,6 +338,15 @@ export class Run {
         const json = line.slice(RESULT_PREFIX.length)
         try {
           const result: TestResult = JSON.parse(json)
+          if (result.type === "plan") {
+            // Metadata event — record planned total but don't push to results
+            if (typeof result.totalChecks === "number") {
+              this.state.plannedTotal = result.totalChecks
+              this.persist().catch(() => {})
+              this.emitter.emit("result", this.id, result)
+            }
+            return
+          }
           this.state.testResults.push(result)
           this.emitter.emit("result", this.id, result)
         } catch {}
