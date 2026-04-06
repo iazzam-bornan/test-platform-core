@@ -199,6 +199,17 @@ export function generateComposeFile(
       ...(cu.env ?? {}),
     }
 
+    if (cu.streamBrowser) {
+      testSvc.environment.STREAM_BROWSER = "true"
+      testSvc.environment.STREAM_INTERACTIVE = cu.streamInteractive ? "true" : "false"
+      // Expose noVNC port 6080 with a random host port so the API (running
+      // outside the docker network) can proxy WebSocket connections to it.
+      // Use the "host-ip::container-port" form to let docker pick a free
+      // host port automatically.
+      testSvc.ports = testSvc.ports ?? []
+      testSvc.ports.push("6080")
+    }
+
     if (cu.repo) {
       // Repo mode: clone inside the container, no volumes
       testSvc.environment.GIT_REPO_URL = cu.repo.url
@@ -289,6 +300,31 @@ export async function getContainerIds(
     }
   }
   return map
+}
+
+/**
+ * Look up the host-side TCP address a container's port is mapped to.
+ * Returns null if the container isn't running or the port isn't mapped.
+ */
+export async function getContainerHostPort(
+  containerId: string,
+  containerPort: number
+): Promise<{ host: string; port: number } | null> {
+  const r = await exec("docker", [
+    "inspect",
+    "--format",
+    `{{(index (index .NetworkSettings.Ports "${containerPort}/tcp") 0).HostIp}}:{{(index (index .NetworkSettings.Ports "${containerPort}/tcp") 0).HostPort}}`,
+    containerId,
+  ])
+  if (r.exitCode !== 0) return null
+  const out = r.stdout.trim()
+  if (!out || out.includes("<no value>") || out.includes("error")) return null
+  const [host, portStr] = out.split(":")
+  const port = parseInt(portStr ?? "", 10)
+  if (isNaN(port)) return null
+  // Docker often returns 0.0.0.0 — rewrite to 127.0.0.1 so the local API can dial it
+  const realHost = !host || host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host
+  return { host: realHost, port }
 }
 
 export async function getContainerHealth(

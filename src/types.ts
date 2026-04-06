@@ -67,6 +67,21 @@ export interface CucumberTest {
     headless?: boolean                                  // default true
     tags?: string                                       // --tags filter
     env?: Record<string, string>                        // additional env vars
+    /**
+     * When true, runs the browser non-headless inside a VNC server so the
+     * platform can stream the live browser view to the UI. Adds ~20-30%
+     * runtime overhead (non-headless is slower). Chromium works best;
+     * Firefox works with caveats; webkit support is experimental.
+     * Default: false.
+     */
+    streamBrowser?: boolean
+    /**
+     * When true (and streamBrowser is on), the frontend viewer forwards
+     * mouse and keyboard input to the streamed browser. Use carefully —
+     * interacting with a running test can cause it to fail.
+     * Default: false (read-only view).
+     */
+    streamInteractive?: boolean
   }
 }
 
