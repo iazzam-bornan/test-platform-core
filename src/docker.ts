@@ -305,19 +305,15 @@ export async function getContainerIds(
  * Look up the host-side TCP address a container's port is mapped to.
  * Returns null if the container isn't running or the port isn't mapped.
  *
- * Uses `docker inspect` with JSON output for reliable cross-platform parsing.
- * Logs to stderr on failure so the API can show meaningful errors.
+ * Uses `docker inspect <id>` (no Go template) and parses the full JSON. We
+ * avoid `--format '{{json ...}}'` because on Windows + shell:true the {{ }}
+ * braces get mangled, producing "template parsing error: unclosed action".
  */
 export async function getContainerHostPort(
   containerId: string,
   containerPort: number
 ): Promise<{ host: string; port: number } | null> {
-  const r = await exec("docker", [
-    "inspect",
-    "--format",
-    "{{json .NetworkSettings.Ports}}",
-    containerId,
-  ])
+  const r = await execNoShell("docker", ["inspect", containerId])
   if (r.exitCode !== 0) {
     console.error(
       `[getContainerHostPort] docker inspect failed for ${containerId}: ${r.stderr.trim()}`
@@ -325,20 +321,15 @@ export async function getContainerHostPort(
     return null
   }
 
-  const raw = r.stdout.trim()
-  if (!raw || raw === "null") {
-    console.error(
-      `[getContainerHostPort] no port info for ${containerId} (output: ${raw})`
-    )
-    return null
-  }
-
-  let portsMap: Record<string, Array<{ HostIp: string; HostPort: string }> | null>
+  let portsMap: Record<string, Array<{ HostIp: string; HostPort: string }> | null> = {}
   try {
-    portsMap = JSON.parse(raw)
+    const parsed = JSON.parse(r.stdout.trim() || "null")
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      portsMap = parsed[0]?.NetworkSettings?.Ports ?? {}
+    }
   } catch (err) {
     console.error(
-      `[getContainerHostPort] failed to parse ports JSON for ${containerId}: ${raw}`
+      `[getContainerHostPort] failed to parse ports JSON for ${containerId}`
     )
     return null
   }
@@ -369,6 +360,26 @@ export async function getContainerHostPort(
       : ipv4.HostIp
 
   return { host: realHost, port }
+}
+
+// Helper variant of `exec` that runs without a shell so Go template
+// braces aren't mangled by the Windows command interpreter.
+function execNoShell(
+  command: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const proc = spawn(command, args, {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+    let stderr = ""
+    proc.stdout.on("data", (d: Buffer) => { stdout += d.toString() })
+    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString() })
+    proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }))
+    proc.on("error", (err) => resolve({ stdout, stderr: err.message, exitCode: 1 }))
+  })
 }
 
 export async function getContainerHealth(
