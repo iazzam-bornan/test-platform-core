@@ -202,12 +202,11 @@ export function generateComposeFile(
     if (cu.streamBrowser) {
       testSvc.environment.STREAM_BROWSER = "true"
       testSvc.environment.STREAM_INTERACTIVE = cu.streamInteractive ? "true" : "false"
-      // Expose noVNC port 6080 with a random host port so the API (running
-      // outside the docker network) can proxy WebSocket connections to it.
-      // Use the "host-ip::container-port" form to let docker pick a free
-      // host port automatically.
+      // Expose noVNC port 6080 with a random host port. The "127.0.0.1::6080"
+      // short-form means: bind to localhost, no fixed host port (random),
+      // mapped to container port 6080. Avoids collisions across parallel runs.
       testSvc.ports = testSvc.ports ?? []
-      testSvc.ports.push("6080")
+      testSvc.ports.push("127.0.0.1::6080")
     }
 
     if (cu.repo) {
@@ -305,24 +304,43 @@ export async function getContainerIds(
 /**
  * Look up the host-side TCP address a container's port is mapped to.
  * Returns null if the container isn't running or the port isn't mapped.
+ *
+ * Uses `docker port <id> <port>` which prints lines like:
+ *   0.0.0.0:32768
+ *   [::]:32768
  */
 export async function getContainerHostPort(
   containerId: string,
   containerPort: number
 ): Promise<{ host: string; port: number } | null> {
-  const r = await exec("docker", [
-    "inspect",
-    "--format",
-    `{{(index (index .NetworkSettings.Ports "${containerPort}/tcp") 0).HostIp}}:{{(index (index .NetworkSettings.Ports "${containerPort}/tcp") 0).HostPort}}`,
-    containerId,
-  ])
+  const r = await exec("docker", ["port", containerId, String(containerPort)])
   if (r.exitCode !== 0) return null
-  const out = r.stdout.trim()
-  if (!out || out.includes("<no value>") || out.includes("error")) return null
-  const [host, portStr] = out.split(":")
-  const port = parseInt(portStr ?? "", 10)
+  const lines = r.stdout
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+  if (lines.length === 0) return null
+
+  // Prefer an IPv4 mapping over IPv6 — easier for the local API to dial.
+  // Lines look like: "0.0.0.0:32768" or "[::]:32768" or "127.0.0.1:32768"
+  const ipv4 = lines.find((l) => !l.startsWith("[")) ?? lines[0]
+  // Strip optional [::] prefix
+  const cleaned = ipv4.startsWith("[") ? ipv4.replace(/^\[[^\]]*\]:/, "") : ipv4
+
+  // Split host:port (last ":" is the port separator)
+  const lastColon = cleaned.lastIndexOf(":")
+  if (lastColon === -1) {
+    // Just a port
+    const port = parseInt(cleaned, 10)
+    if (isNaN(port)) return null
+    return { host: "127.0.0.1", port }
+  }
+
+  const host = cleaned.slice(0, lastColon)
+  const port = parseInt(cleaned.slice(lastColon + 1), 10)
   if (isNaN(port)) return null
-  // Docker often returns 0.0.0.0 — rewrite to 127.0.0.1 so the local API can dial it
+
+  // Rewrite 0.0.0.0 / empty to 127.0.0.1 so the local API can dial it
   const realHost = !host || host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host
   return { host: realHost, port }
 }
