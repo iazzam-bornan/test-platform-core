@@ -305,43 +305,69 @@ export async function getContainerIds(
  * Look up the host-side TCP address a container's port is mapped to.
  * Returns null if the container isn't running or the port isn't mapped.
  *
- * Uses `docker port <id> <port>` which prints lines like:
- *   0.0.0.0:32768
- *   [::]:32768
+ * Uses `docker inspect` with JSON output for reliable cross-platform parsing.
+ * Logs to stderr on failure so the API can show meaningful errors.
  */
 export async function getContainerHostPort(
   containerId: string,
   containerPort: number
 ): Promise<{ host: string; port: number } | null> {
-  const r = await exec("docker", ["port", containerId, String(containerPort)])
-  if (r.exitCode !== 0) return null
-  const lines = r.stdout
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-  if (lines.length === 0) return null
-
-  // Prefer an IPv4 mapping over IPv6 — easier for the local API to dial.
-  // Lines look like: "0.0.0.0:32768" or "[::]:32768" or "127.0.0.1:32768"
-  const ipv4 = lines.find((l) => !l.startsWith("[")) ?? lines[0]
-  // Strip optional [::] prefix
-  const cleaned = ipv4.startsWith("[") ? ipv4.replace(/^\[[^\]]*\]:/, "") : ipv4
-
-  // Split host:port (last ":" is the port separator)
-  const lastColon = cleaned.lastIndexOf(":")
-  if (lastColon === -1) {
-    // Just a port
-    const port = parseInt(cleaned, 10)
-    if (isNaN(port)) return null
-    return { host: "127.0.0.1", port }
+  const r = await exec("docker", [
+    "inspect",
+    "--format",
+    "{{json .NetworkSettings.Ports}}",
+    containerId,
+  ])
+  if (r.exitCode !== 0) {
+    console.error(
+      `[getContainerHostPort] docker inspect failed for ${containerId}: ${r.stderr.trim()}`
+    )
+    return null
   }
 
-  const host = cleaned.slice(0, lastColon)
-  const port = parseInt(cleaned.slice(lastColon + 1), 10)
-  if (isNaN(port)) return null
+  const raw = r.stdout.trim()
+  if (!raw || raw === "null") {
+    console.error(
+      `[getContainerHostPort] no port info for ${containerId} (output: ${raw})`
+    )
+    return null
+  }
+
+  let portsMap: Record<string, Array<{ HostIp: string; HostPort: string }> | null>
+  try {
+    portsMap = JSON.parse(raw)
+  } catch (err) {
+    console.error(
+      `[getContainerHostPort] failed to parse ports JSON for ${containerId}: ${raw}`
+    )
+    return null
+  }
+
+  const key = `${containerPort}/tcp`
+  const bindings = portsMap[key]
+  if (!bindings || bindings.length === 0) {
+    console.error(
+      `[getContainerHostPort] container port ${key} not published. Available: ${Object.keys(portsMap).join(", ") || "(none)"}`
+    )
+    return null
+  }
+
+  // Prefer IPv4 binding (HostIp = 0.0.0.0 or 127.0.0.1) over IPv6
+  const ipv4 = bindings.find((b) => b.HostIp && !b.HostIp.includes(":")) ?? bindings[0]
+  const port = parseInt(ipv4.HostPort, 10)
+  if (isNaN(port)) {
+    console.error(
+      `[getContainerHostPort] could not parse HostPort: ${ipv4.HostPort}`
+    )
+    return null
+  }
 
   // Rewrite 0.0.0.0 / empty to 127.0.0.1 so the local API can dial it
-  const realHost = !host || host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host
+  const realHost =
+    !ipv4.HostIp || ipv4.HostIp === "0.0.0.0" || ipv4.HostIp === "::"
+      ? "127.0.0.1"
+      : ipv4.HostIp
+
   return { host: realHost, port }
 }
 
