@@ -202,6 +202,7 @@ export function generateComposeFile(
     if (cu.streamBrowser) {
       testSvc.environment.STREAM_BROWSER = "true"
       testSvc.environment.STREAM_INTERACTIVE = cu.streamInteractive ? "true" : "false"
+      testSvc.environment.STREAM_DESKTOP = cu.streamDesktop ? "true" : "false"
       // Expose noVNC port 6080 with a random host port. The "127.0.0.1::6080"
       // short-form means: bind to localhost, no fixed host port (random),
       // mapped to container port 6080. Avoids collisions across parallel runs.

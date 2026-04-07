@@ -82,6 +82,15 @@ export interface CucumberTest {
      * Default: false (read-only view).
      */
     streamInteractive?: boolean
+    /**
+     * When true (and streamBrowser is on), launches a full Linux desktop
+     * inside the test runner container — window manager, terminal, file
+     * manager — instead of just a fullscreen browser. Lets you poke
+     * around the container as if it was a remote machine. Useful for
+     * debugging cloned test repos, inspecting `/results`, etc.
+     * Default: false.
+     */
+    streamDesktop?: boolean
   }
 }
 
